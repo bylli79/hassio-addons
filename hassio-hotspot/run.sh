@@ -194,10 +194,11 @@ if test ${DHCP_SERVER} = true; then
         # IPv6 DHCP configuration if enabled
         if test ${DHCPV6_SERVER} = true; then
             echo "# IPv6 DHCP configuration" >> ${DNSMASQ_CONFIG}
+            echo "interface=${INTERFACE}" >> ${DNSMASQ_CONFIG}
             echo "enable-ra" >> ${DNSMASQ_CONFIG}
             echo "ra-param=*,0,0" >> ${DNSMASQ_CONFIG}
-            echo "dhcp-range=::,constructor:${INTERFACE},ra-stateful,64,${LEASE_TIME}s" >> ${DNSMASQ_CONFIG}
-            echo "dhcp-option=option6:dns-server,${DHCPV6_DNS}" >> ${DNSMASQ_CONFIG}
+            echo "dhcp-range=fd00:192:168:99::100,fd00:192:168:99::1ff,64,12h" >> ${DNSMASQ_CONFIG}
+            echo "dhcp-option=option6:dns-server,fd00:192:168:99::1" >> ${DNSMASQ_CONFIG}
             echo "" >> ${DNSMASQ_CONFIG}
             
             # Add IPv6 static leases

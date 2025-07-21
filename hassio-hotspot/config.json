@@ -1,6 +1,6 @@
 {
   "name": "Hassio Hotspot",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "slug": "hassio-hotspot",
   "description": "Access point for your IoT devives with configurable network interface and DHCP server",
   "arch": ["armhf", "armv7", "aarch64", "amd64", "i386"],
