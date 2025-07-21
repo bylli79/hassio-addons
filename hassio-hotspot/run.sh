@@ -159,19 +159,24 @@ reset_interfaces
 ifup ${INTERFACE}
 sleep 1
 
-# Setup dnsmasq for DHCP (IPv4 and IPv6)
-if test ${DHCP_SERVER} = true || test ${DHCPV6_SERVER} = true; then
-    DNSMASQ_CONFIG="/etc/dnsmasq.conf"
-    
-    echo "Setup dnsmasq ..."
-    echo "# Basic configuration" > ${DNSMASQ_CONFIG}
-    echo "interface=${INTERFACE}" >> ${DNSMASQ_CONFIG}
-    echo "bind-interfaces" >> ${DNSMASQ_CONFIG}
-    echo "except-interface=lo" >> ${DNSMASQ_CONFIG}
-    echo "" >> ${DNSMASQ_CONFIG}
-    
-    # IPv4 DHCP configuration
-    if test ${DHCP_SERVER} = true; then
+if test ${DHCP_SERVER} = true; then
+    # Create leases directory and file for udhcpd (fallback)
+    mkdir -p /var/lib/udhcpd
+    touch /var/lib/udhcpd/udhcpd.leases
+
+    # Check if dnsmasq is available
+    if command -v dnsmasq >/dev/null 2>&1; then
+        echo "Using dnsmasq for DHCP (IPv4/IPv6)..."
+        DNSMASQ_CONFIG="/tmp/dnsmasq.conf"
+        
+        echo "Setup dnsmasq ..."
+        echo "# Basic configuration" > ${DNSMASQ_CONFIG}
+        echo "interface=${INTERFACE}" >> ${DNSMASQ_CONFIG}
+        echo "bind-interfaces" >> ${DNSMASQ_CONFIG}
+        echo "except-interface=lo" >> ${DNSMASQ_CONFIG}
+        echo "" >> ${DNSMASQ_CONFIG}
+        
+        # IPv4 DHCP configuration
         echo "# IPv4 DHCP configuration" >> ${DNSMASQ_CONFIG}
         echo "dhcp-range=${DHCP_START},${DHCP_END},${DHCP_SUBNET},${LEASE_TIME}s" >> ${DNSMASQ_CONFIG}
         echo "dhcp-option=option:router,${DHCP_ROUTER}" >> ${DNSMASQ_CONFIG}
@@ -185,28 +190,59 @@ if test ${DHCP_SERVER} = true || test ${DHCPV6_SERVER} = true; then
             fi
         done <<< "${STATIC_LEASES}"
         echo "" >> ${DNSMASQ_CONFIG}
-    fi
-    
-    # IPv6 DHCP configuration
-    if test ${DHCPV6_SERVER} = true; then
-        echo "# IPv6 DHCP configuration" >> ${DNSMASQ_CONFIG}
-        echo "enable-ra" >> ${DNSMASQ_CONFIG}
-        echo "ra-names,ra-stateful" >> ${DNSMASQ_CONFIG}
-        echo "dhcp-range=${DHCPV6_START},${DHCPV6_END},64,${LEASE_TIME}s" >> ${DNSMASQ_CONFIG}
-        echo "dhcp-option=option6:dns-server,[${DHCPV6_DNS}]" >> ${DNSMASQ_CONFIG}
-        echo "" >> ${DNSMASQ_CONFIG}
         
-        # Add IPv6 static leases
-        while IFS=, read -r mac ipv6 name; do
-            if [ ! -z "$mac" ] && [ ! -z "$ipv6" ]; then
-                echo "dhcp-host=${mac},[${ipv6}]  # ${name}" >> ${DNSMASQ_CONFIG}
+        # IPv6 DHCP configuration if enabled
+        if test ${DHCPV6_SERVER} = true; then
+            echo "# IPv6 DHCP configuration" >> ${DNSMASQ_CONFIG}
+            echo "enable-ra" >> ${DNSMASQ_CONFIG}
+            echo "ra-names,ra-stateful" >> ${DNSMASQ_CONFIG}
+            echo "dhcp-range=${DHCPV6_START},${DHCPV6_END},64,${LEASE_TIME}s" >> ${DNSMASQ_CONFIG}
+            echo "dhcp-option=option6:dns-server,[${DHCPV6_DNS}]" >> ${DNSMASQ_CONFIG}
+            echo "" >> ${DNSMASQ_CONFIG}
+            
+            # Add IPv6 static leases
+            while IFS=, read -r mac ipv6 name; do
+                if [ ! -z "$mac" ] && [ ! -z "$ipv6" ]; then
+                    echo "dhcp-host=${mac},[${ipv6}]  # ${name}" >> ${DNSMASQ_CONFIG}
+                fi
+            done <<< "${STATIC_LEASES_V6}"
+            echo "" >> ${DNSMASQ_CONFIG}
+        fi
+        
+        echo "Starting dnsmasq..."
+        dnsmasq --conf-file=${DNSMASQ_CONFIG} --no-daemon --log-dhcp &
+    else
+        echo "dnsmasq not found, falling back to udhcpd (IPv4 only)..."
+        
+        # Calculate max leases from DHCP range
+        START_IP_LAST_OCTET=$(echo ${DHCP_START} | cut -d. -f4)
+        END_IP_LAST_OCTET=$(echo ${DHCP_END} | cut -d. -f4)
+        MAX_LEASES=$((END_IP_LAST_OCTET - START_IP_LAST_OCTET + 1))
+
+        # Setup udhcpd.conf
+        UCONFIG="/tmp/udhcpd.conf"
+
+        echo "Setup udhcpd ..."
+        echo "interface    ${INTERFACE}"     > ${UCONFIG}
+        echo "start        ${DHCP_START}"    >> ${UCONFIG}
+        echo "end          ${DHCP_END}"      >> ${UCONFIG}
+        echo "max_leases   ${MAX_LEASES}"    >> ${UCONFIG}
+        echo "opt dns      ${DHCP_DNS}"      >> ${UCONFIG}
+        echo "opt subnet   ${DHCP_SUBNET}"   >> ${UCONFIG}
+        echo "opt router   ${DHCP_ROUTER}"   >> ${UCONFIG}
+        echo "opt lease    ${LEASE_TIME}"    >> ${UCONFIG}
+        echo ""                              >> ${UCONFIG}
+
+        # Add static leases
+        while IFS=, read -r mac ip name; do
+            if [ ! -z "$mac" ] && [ ! -z "$ip" ]; then
+                echo "static_lease ${mac} ${ip}  # ${name}" >> ${UCONFIG}
             fi
-        done <<< "${STATIC_LEASES_V6}"
-        echo "" >> ${DNSMASQ_CONFIG}
+        done <<< "${STATIC_LEASES}"
+
+        echo "Starting udhcpd..."
+        udhcpd -f -S ${UCONFIG} &
     fi
-    
-    echo "Starting dnsmasq..."
-    dnsmasq --conf-file=${DNSMASQ_CONFIG} --no-daemon &
 fi
 
 sleep 1
