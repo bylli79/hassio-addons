@@ -152,6 +152,17 @@ if test ${DHCPV6_SERVER} = true; then
     echo "  address ${IPV6_INTERFACE_ADDR}" >> ${IFFILE}
     echo "  netmask 64" >> ${IFFILE}
     echo "" >> ${IFFILE}
+    
+    echo "Enabling IPv6 forwarding for ${INTERFACE}..."
+    # Enable IPv6 forwarding for the interface
+    sysctl -w net.ipv6.conf.${INTERFACE}.forwarding=1
+    # Enable global IPv6 forwarding 
+    sysctl -w net.ipv6.conf.all.forwarding=1
+    # Keep Router Advertisements working even with forwarding enabled
+    sysctl -w net.ipv6.conf.${INTERFACE}.accept_ra=2
+    sysctl -w net.ipv6.conf.all.accept_ra=2
+    # Enable neighbor discovery proxy for link-local
+    sysctl -w net.ipv6.conf.${INTERFACE}.proxy_ndp=1
 fi
 
 echo "Resseting interfaces"
@@ -191,6 +202,7 @@ if test ${DHCP_SERVER} = true || test ${DHCPV6_SERVER} = true; then
     if test ${DHCPV6_SERVER} = true; then
         echo "# IPv6 DHCP configuration" >> ${DNSMASQ_CONFIG}
         echo "enable-ra" >> ${DNSMASQ_CONFIG}
+        echo "ra-names,ra-stateful" >> ${DNSMASQ_CONFIG}
         echo "dhcp-range=${DHCPV6_START},${DHCPV6_END},64,${LEASE_TIME}s" >> ${DNSMASQ_CONFIG}
         echo "dhcp-option=option6:dns-server,[${DHCPV6_DNS}]" >> ${DNSMASQ_CONFIG}
         echo "" >> ${DNSMASQ_CONFIG}
