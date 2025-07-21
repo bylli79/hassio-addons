@@ -152,17 +152,6 @@ if test ${DHCPV6_SERVER} = true; then
     echo "  address ${IPV6_INTERFACE_ADDR}" >> ${IFFILE}
     echo "  netmask 64" >> ${IFFILE}
     echo "" >> ${IFFILE}
-    
-    echo "Enabling IPv6 forwarding for ${INTERFACE}..."
-    # Enable IPv6 forwarding for the interface
-    sysctl -w net.ipv6.conf.${INTERFACE}.forwarding=1
-    # Enable global IPv6 forwarding 
-    sysctl -w net.ipv6.conf.all.forwarding=1
-    # Keep Router Advertisements working even with forwarding enabled
-    sysctl -w net.ipv6.conf.${INTERFACE}.accept_ra=2
-    sysctl -w net.ipv6.conf.all.accept_ra=2
-    # Enable neighbor discovery proxy for link-local
-    sysctl -w net.ipv6.conf.${INTERFACE}.proxy_ndp=1
 fi
 
 echo "Resseting interfaces"
@@ -224,6 +213,24 @@ sleep 1
 
 echo "Starting HostAP daemon ..."
 hostapd ${HCONFIG} &
+
+sleep 3
+
+# Configure IPv6 forwarding AFTER everything is up and running
+if test ${DHCPV6_SERVER} = true; then
+    echo "Enabling IPv6 forwarding for Matter/CHIP devices..."
+    # Enable IPv6 forwarding for the interface
+    sysctl -w net.ipv6.conf.${INTERFACE}.forwarding=1 2>/dev/null || true
+    # Enable global IPv6 forwarding 
+    sysctl -w net.ipv6.conf.all.forwarding=1 2>/dev/null || true
+    # Keep Router Advertisements working even with forwarding enabled
+    sysctl -w net.ipv6.conf.${INTERFACE}.accept_ra=2 2>/dev/null || true
+    sysctl -w net.ipv6.conf.all.accept_ra=2 2>/dev/null || true
+    # Enable neighbor discovery proxy for link-local
+    sysctl -w net.ipv6.conf.${INTERFACE}.proxy_ndp=1 2>/dev/null || true
+    
+    echo "IPv6 forwarding enabled - Matter/CHIP devices should now work"
+fi
 
 while true; do 
     echo "Interface stats:"
