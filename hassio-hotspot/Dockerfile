@@ -1,7 +1,7 @@
 ARG BUILD_FROM
 FROM $BUILD_FROM
 
-LABEL João Loureiro <joaofl@gmail.com>
+LABEL Carlo Zamponi - João Loureiro <joaofl@gmail.com>
 
 # Set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -14,6 +14,7 @@ RUN apk update && apk add --no-cache    \
     bash jq iw net-tools                \
     sudo busybox-extras                 \
     hostapd networkmanager-cli iptables \
+    dnsmasq                             \
     linux-firmware-other                \
     linux-firmware-ath6k                \
     linux-firmware-ath10k               \
@@ -21,7 +22,6 @@ RUN apk update && apk add --no-cache    \
     rm -rf /var/cache/apk/*
 
 COPY hostapd.conf /
-COPY udhcpd.conf /etc/udhcpd.conf
 COPY run.sh /
 RUN chmod a+x /run.sh
 
